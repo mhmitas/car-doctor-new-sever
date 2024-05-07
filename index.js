@@ -9,8 +9,37 @@ const port = process.env.PORT || 5000;
 
 
 //middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    credentials: true
+}));
 app.use(express.json())
+app.use(cookieParser())
+
+// myMiddlewares.
+const logger = async (req, res, next) => {
+    // console.log('called', req.hostname, req.originalUrl)
+    next()
+}
+
+async function varifyToken(req, res, next) {
+    const token = req.cookies?.myToken
+    // console.log('From varify token middleware', token);
+    if (!token) {
+        return res.status(401).send({ message: 'unAuthorize' })
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+        // error
+        if (err) {
+            console.error('JWT verification failed:', err);
+            return res.status(401).send('Unauthorized');
+        }
+        // if token is valid ...
+        console.log(decoded);
+        next()
+    })
+}
+
 
 
 app.get('/', (req, res) => {
@@ -27,7 +56,7 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
- 
+
 async function run() {
     try {
         const database = client.db('carDoctorsDB')
@@ -37,14 +66,10 @@ async function run() {
         // auth relatd api
         app.post('/jwt', async (req, res) => {
             const user = req.body
-            token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' }) // secret
             res
-            .cookie('token', token, {
-                httpOnly:true,
-                secure: false,  // http://localhost:5000/
-                sameSite:'none'
-            })
-            .send({success: true});
+                .cookie('myToken', token, { httpOnly: true, secure: false, sameSite: false })
+                .send({ success: true })
         })
 
         // services related api
@@ -64,7 +89,8 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/bookings', async (req, res) => {
+        app.get('/bookings', logger, varifyToken, async (req, res) => {
+            // console.log(req.cookies.myToken)
             const result = await bookingCollection.find().toArray()
             res.send(result)
         })
