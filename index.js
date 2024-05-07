@@ -32,10 +32,11 @@ async function varifyToken(req, res, next) {
         // error
         if (err) {
             console.error('JWT verification failed:', err);
-            return res.status(401).send('Unauthorized');
+            return res.status(401).send({ message: 'Unauthorized' });
         }
-        // if token is valid ...
+        // if token is valid then would be decoded
         console.log(decoded);
+        req.user = decoded
         next()
     })
 }
@@ -91,6 +92,7 @@ async function run() {
 
         app.get('/bookings', logger, varifyToken, async (req, res) => {
             // console.log(req.cookies.myToken)
+            console.log('User in the valid token:', req.user)
             const result = await bookingCollection.find().toArray()
             res.send(result)
         })
